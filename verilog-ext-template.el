@@ -103,16 +103,16 @@ cases to iterate over."
   (interactive)
   (let (param-read)
     (with-verilog-ext-template
-      (insert "case (" (or expr (read-string "Expression: ")) ")\n\n")
+      (insert "case (" (or expr (read-string "Expression: ")) ")\n")
       (if cases
           (dolist (case cases)
             (insert case ": begin\n")
             (insert "// Output statements... \n")
-            (insert "end\n\n"))
+            (insert "end\n"))
         (while (not (string-equal (setq param-read (read-string "Case: ")) ""))
           (insert param-read ": begin\n")
           (insert "// Output statements... \n")
-          (insert "end\n\n")))
+          (insert "end\n")))
       (insert "endcase\n"))))
 
 (defun verilog-ext-template--compute-vector-width ()
@@ -265,7 +265,36 @@ DIRECTION should be either input or output."
              (insert str)
              (message (concat "[Line " (format "%s" (line-number-at-pos)) "]: " str)))))))
 
-(defun verilog-ext-template-fsm (&optional async)
+
+(defun verilog-ext-template-fsm1 (&optional async)
+  "Insert a state machine custom definition with one always_ff block.
+If ASYNC is non-nil create an asynchronous reset."
+  (interactive)
+  (let* ((state-type (read-string "Name of state typedef: " "state_t"))
+         (state-var  (read-string "Name of state variable: " "state"))
+         (enum-labels))
+    ;; Define state enum typedef
+    (with-verilog-ext-template
+      (setq enum-labels (verilog-ext-template-enum-typedef :typedef :logic state-type))
+      (newline)
+      (insert state-type " " state-var ";\n\n"))
+    ;; Synchronous logic
+    (with-verilog-ext-template
+      (insert "// State FF for " state-var "\n")
+      (insert "always_ff @ (posedge " verilog-ext-template-clock)
+      (when async
+        (insert " or negedge " verilog-ext-template-resetn))
+      (insert ") begin\n")
+      (insert "if (!" verilog-ext-template-resetn ") begin\n")
+      (insert "// Init....\n")
+      (insert state-var " <= " (car enum-labels) ";\n")
+      (insert "end\n")
+      (insert "else begin\n")
+      (verilog-ext-template-case state-var enum-labels)
+      (insert "end\n")
+      (insert "end\n"))))
+
+(defun verilog-ext-template-fsm2 (&optional async)
   "Insert a state machine custom definition with two always blocks.
 One for next state and output logic and one for the state registers.
 If ASYNC is non-nil create an asynchronous reset."
@@ -775,8 +804,10 @@ Create it only if in a project and the Makefile does not already exist."
 
   ("@"   (verilog-ext-template-insert-yasnippet "@") "Clk posedge" :column "Others")
   ("D"   (verilog-ext-template-def-logic) "Define signal")
-  ("FS"  (verilog-ext-template-fsm)   "FSM Sync")
-  ("FA"  (verilog-ext-template-fsm t) "FSM Async")
+  ("FS1"  (verilog-ext-template-fsm1)   "FSM 1 Sync")
+  ("FA1"  (verilog-ext-template-fsm1 t) "FSM 1 Async")
+  ("FS2"  (verilog-ext-template-fsm2)   "FSM2 Sync")
+  ("FA2"  (verilog-ext-template-fsm2 t) "FSM2 Async")
   ("IS"  (call-interactively #'verilog-ext-template-inst-auto-from-file-simple) "Instance (simple)")
   ("IP"  (call-interactively #'verilog-ext-template-inst-auto-from-file-params) "Instance (params)")
   ("TS"  (call-interactively #'verilog-ext-template-testbench-simple-from-file) "TB from DUT (simple)")
